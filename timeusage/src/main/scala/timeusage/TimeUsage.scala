@@ -63,14 +63,20 @@ object TimeUsage {
     * @param columnNames Column names of the DataFrame
     */
   def dfSchema(columnNames: List[String]): StructType =
-    ???
+  StructType(columnNames.zipWithIndex.map{
+      case(columnName, columnIndex) =>
+        StructField(columnName, if (columnIndex > 0) StringType else DoubleType, false)
+  })
 
 
   /** @return An RDD Row compatible with the schema produced by `dfSchema`
     * @param line Raw fields
     */
   def row(line: List[String]): Row =
-    ???
+  Row.fromSeq(line.zipWithIndex.map{
+    case(columnValue, columnIndex) =>
+      if (columnIndex > 0) columnValue.toDouble else columnValue
+  })
 
   /** @return The initial data frame columns partitioned in three groups: primary needs (sleeping, eating, etc.),
     *         work and other (leisure activities)
@@ -88,7 +94,26 @@ object TimeUsage {
     *    “t10”, “t12”, “t13”, “t14”, “t15”, “t16” and “t18” (those which are not part of the previous groups only).
     */
   def classifiedColumns(columnNames: List[String]): (List[Column], List[Column], List[Column]) = {
-    ???
+    columnNames.foldLeft(List[Column](), List[Column](), List[Column]())((prev, colName)=>{
+      val newCol = List(new ColumnName(colName))
+      if(colName.startsWith("t01") || colName.startsWith("t03")
+        || colName.startsWith("t11") || colName.startsWith("t1801") || colName.startsWith("t1803")){
+        (prev._1 ::: newCol, prev._2, prev._3)
+      }
+      else if(colName.startsWith("t05")|| colName.startsWith("t1805")){
+        (prev._1, prev._2 ::: newCol, prev._3)
+      }
+      else if(colName.startsWith("t02") || colName.startsWith("t04") || colName.startsWith("t06")
+        || colName.startsWith("t07") || colName.startsWith("t08") || colName.startsWith("t09")
+        || colName.startsWith("t10") || colName.startsWith("t12") || colName.startsWith("t13")
+        || colName.startsWith("t14") || colName.startsWith("t15") || colName.startsWith("t16")
+        || colName.startsWith("t18")){
+        (prev._1, prev._2 , prev._3 ::: newCol)
+      }
+      else{
+        prev
+      }
+    })
   }
 
   /** @return a projection of the initial DataFrame such that all columns containing hours spent on primary needs
@@ -127,13 +152,18 @@ object TimeUsage {
     otherColumns: List[Column],
     df: DataFrame
   ): DataFrame = {
-    val workingStatusProjection: Column = ???
-    val sexProjection: Column = ???
-    val ageProjection: Column = ???
+    val workingStatusProjection: Column = when(($"telfs" < 3) && ($"telfs" >= 1), "working")
+                                            .otherwise("not working") as "working"
 
-    val primaryNeedsProjection: Column = ???
-    val workProjection: Column = ???
-    val otherProjection: Column = ???
+    val sexProjection: Column = when($"tesex" === 1, "male").otherwise("female") as "sex"
+
+    val ageProjection: Column = when(($"teage" <= 22) && ($"teage" >= 15), "young")
+                                .when(($"teage" <= 55) && ($"teage" >= 23), "teage")
+                                      .otherwise("elder") as "age"
+
+    val primaryNeedsProjection: Column = primaryNeedsColumns.reduce((c1, c2) => c1 + c2) as "primaryNeeds"
+    val workProjection: Column =  workColumns.reduce((c1, c2) => c1 + c2) as "work"
+    val otherProjection: Column =  otherColumns.reduce((c1, c2) => c1 + c2) as "other"
     df
       .select(workingStatusProjection, sexProjection, ageProjection, primaryNeedsProjection, workProjection, otherProjection)
       .where($"telfs" <= 4) // Discard people who are not in labor force
