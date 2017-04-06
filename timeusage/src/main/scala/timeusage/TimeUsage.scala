@@ -187,7 +187,12 @@ object TimeUsage {
     * Finally, the resulting DataFrame should be sorted by working status, sex and age.
     */
   def timeUsageGrouped(summed: DataFrame): DataFrame = {
-    ???
+    summed.groupBy($"working", $"sex", $"age")
+      .agg(
+        round(avg($"primaryNeeds"), 1) as "primaryNeeds",
+        round(avg($"work"), 1) as "other",
+        round(avg($"other"), 1) as "other"
+      )
   }
 
   /**
@@ -204,7 +209,14 @@ object TimeUsage {
     * @param viewName Name of the SQL view to use
     */
   def timeUsageGroupedSqlQuery(viewName: String): String =
-    ???
+    s"""
+      |SELECT
+      |round(avg(primaryNeeds), 1) as primaryNeeds,
+      |round(avg(work), 1) as work,
+      |round(avg(other), 1) as other,
+      |FROM $viewName
+      |GROUP BY working, sex, age
+    """.stripMargin
 
   /**
     * @return A `Dataset[TimeUsageRow]` from the “untyped” `DataFrame`
